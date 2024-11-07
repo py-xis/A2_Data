@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Data Treemap</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+
+<div id="treemap"></div>
+
+<script>
+    d3.csv("https://raw.githubusercontent.com/py-xis/A2_Data/refs/heads/main/Customer%20Loyalty%20History.csv").then(function(data) {
+        // Maps to hold total salaries and counts for calculating averages
+        const countryTotals = {};
+        const countryCounts = {};
+        const provinceTotals = {};
+        const provinceCounts = {};
+        const cityTotals = {};
+        const cityCounts = {};
+
+        // Arrays for Plotly data
+        const labels = [];
+        const parents = [];
+        const values = [];
+        const salaryMap = {};
+
+        // Step 1: Aggregate data for countries, provinces, and cities
+        data.forEach(row => {
+            const country = row['Country'];
+            const province = row['Province'];
+            const city = row['City'];
+            const salary = parseFloat(row['CLV']) || 0;
+
+            // Aggregate total salary and count for countries
+            countryTotals[country] = (countryTotals[country] || 0) + salary;
+            countryCounts[country] = (countryCounts[country] || 0) + (salary > 0 ? 1 : 0);
+
+            // Aggregate total salary and count for provinces
+            const provinceKey = `${country}-${province}`;
+            provinceTotals[provinceKey] = (provinceTotals[provinceKey] || 0) + salary;
+            provinceCounts[provinceKey] = (provinceCounts[provinceKey] || 0) + (salary > 0 ? 1 : 0);
+
+            // Aggregate total salary and count for cities
+            const cityKey = `${province}-${city}`;
+            cityTotals[cityKey] = (cityTotals[cityKey] || 0) + salary;
+            cityCounts[cityKey] = (cityCounts[cityKey] || 0) + (salary > 0 ? 1 : 0);
+
+            // Step 2: Add unique country nodes
+            if (!salaryMap[country]) {
+                labels.push(country);
+                parents.push('');
+                salaryMap[country] = true;
+            }
+
+            // Step 3: Add unique province nodes
+            if (!salaryMap[provinceKey]) {
+                labels.push(province);
+                parents.push(country);
+                salaryMap[provinceKey] = true;
+            }
+
+            // Step 4: Add unique city nodes
+            if (!salaryMap[`${country}-${province}-${city}`]) {
+                labels.push(city);
+                parents.push(province);
+                salaryMap[`${country}-${province}-${city}`] = true;
+            }
+        });
+
+        // Step 5: Calculate and assign average values for countries, provinces, and cities
+        labels.forEach((label, index) => {
+            if (parents[index] === '') {
+                // Country-level node
+                values[index] = (countryTotals[label] / (countryCounts[label] || 1)).toFixed(2);
+            } else if (parents.includes(label)) {
+                // Province-level node
+                const provinceKey = `${parents[index]}-${label}`;
+                values[index] = (provinceTotals[provinceKey] / (provinceCounts[provinceKey] || 1)).toFixed(2);
+            } else {
+                // City-level node
+                const cityKey = `${parents[index]}-${label}`;
+                const cityAverage = (cityTotals[cityKey] / (cityCounts[cityKey] || 1)).toFixed(2);
+                values[index] = parseFloat(cityAverage); // Directly set city average as the value
+            }
+        });
+
+        // Plotting the treemap
+        let colormap = 'Portland';
+        const trace = {
+            type: 'treemap',
+            labels: labels,
+            parents: parents,
+            values: values,
+            textinfo: 'label+value',
+            hoverinfo: 'label+value',
+            marker: {colorscale: colormap}
+        };
+
+        Plotly.newPlot('treemap', [trace], {
+            title: 'Customer Data Treemap by Country, Province, and City (Average CLV)'
+        });
+    }).catch(function(error) {
+        console.error("Error loading the CSV file:", error);
+    });
+</script>
